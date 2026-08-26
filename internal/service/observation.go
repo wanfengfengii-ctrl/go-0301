@@ -28,6 +28,14 @@ func (s *Service) RecordObservation(trialID string, in ObservationInput) error {
 		if !ok {
 			return nil, domain.New(domain.CodeInvalidSampleCount, "plate %q not found", in.PlateID)
 		}
+		// Observations may only be recorded for a plate belonging to the
+		// current generation. A retest opens an isolated new generation, so a
+		// late observation against a previous-generation plate must be rejected
+		// rather than absorbed into the current generation's progress.
+		if pl.Generation != t.Trial.CurrentGen {
+			return nil, domain.New(domain.CodeGenerationMismatch,
+				"plate %q generation %d != trial generation %d", in.PlateID, pl.Generation, t.Trial.CurrentGen)
+		}
 		if err := t.advanceClock(in.LogicalTime); err != nil {
 			return nil, err
 		}

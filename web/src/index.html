@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>种质库种子复苏活力验证</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>种质库种子复苏活力验证</h1>
+    <p class="subtitle">种子样本谱系追踪 · 复苏试验控制 · 保存批次放行</p>
+  </header>
+
+  <section id="status" class="panel">
+    <h2>后端实时状态</h2>
+    <dl>
+      <dt>服务</dt><dd id="st-service">—</dd>
+      <dt>试验数量</dt><dd id="st-trials">—</dd>
+      <dt>逻辑时间</dt><dd id="st-now">—</dd>
+    </dl>
+  </section>
+
+  <section id="create" class="panel">
+    <h2>试验建档</h2>
+    <form id="create-form">
+      <label for="species">物种</label>
+      <input id="species" name="species" placeholder="例如 Oryza sativa" required>
+      <button type="submit">创建试验</button>
+    </form>
+    <p id="create-result" class="result"></p>
+  </section>
+
+  <section id="trials" class="panel">
+    <h2>当前试验</h2>
+    <table id="trials-table">
+      <thead>
+        <tr><th>试验编号</th><th>物种</th><th>代次</th><th>状态</th><th>终局</th><th>操作</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section id="detail" class="panel">
+    <h2>试验详情 <span id="detail-id">—</span></h2>
+    <dl>
+      <dt>当前代次</dt><dd id="detail-gen">—</dd>
+      <dt>逻辑时钟</dt><dd id="detail-clock">—</dd>
+      <dt>保存批次</dt><dd id="detail-seedlots">—</dd>
+      <dt>分装样本</dt><dd id="detail-samples">—</dd>
+      <dt>培养皿</dt><dd id="detail-plates">—</dd>
+      <dt>粒数守恒</dt><dd id="detail-conserved">—</dd>
+    </dl>
+    <h3>粒数分配</h3>
+    <table id="detail-allocations">
+      <thead><tr><th>样本</th><th>来源</th><th>培养</th><th>留样</th><th>守恒</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <footer>
+    <p>样本领用 · 培养阶段录入 · 观察矩阵 · 租约与重试查询 · 复测确认 · 双人终局操作</p>
+  </footer>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

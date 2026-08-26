@@ -50,9 +50,17 @@ func NewStandardCatalog() *StandardCatalog {
 	return c
 }
 
-// Register stores (or replaces) a rule snapshot under a version.
+// Register stores (or replaces) a rule snapshot under a version. The slice
+// fields are deep-copied so the stored snapshot is isolated from any later
+// mutation of the caller's slices; otherwise a config builder that reuses the
+// stage and environment slices across versions would pollute earlier
+// registrations and invalidate the digest computed at registration time.
 func (c *StandardCatalog) Register(version string, snap domain.RuleSnapshot) {
 	snap.Version = version
+	snap.Stages = append([]domain.Stage(nil), snap.Stages...)
+	snap.EnvironmentRanges = append([]domain.EnvironmentRange(nil), snap.EnvironmentRanges...)
+	snap.Schedule.Intervals = append([]time.Duration(nil), snap.Schedule.Intervals...)
+	snap.Qualification.RequiredRoles = append([]string(nil), snap.Qualification.RequiredRoles...)
 	c.versions[version] = snap
 }
 

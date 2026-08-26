@@ -101,7 +101,19 @@ func (s *Service) SubmitReceipt(trialID string, in ReceiptInput) (domain.Instrum
 					RetryOrdinal: call.RetryOrdinal,
 				}}}, nil
 		}
-		// Failure: only a deterministic retry ordinal, no evidence.
+		// Failure: only a deterministic retry ordinal, no evidence. A replay of
+		// an already-recorded failure (its ordinal is below the current one,
+		// e.g. a gateway re-delivering the timeout receipt) must not advance the
+		// ordinal again or it would desync from the real retry, which carries
+		// the next ordinal and would no longer match.
+		if in.RetryOrdinal < call.RetryOrdinal {
+			out = call
+			return nil, nil // stale failure receipt: already absorbed as history
+		}
+		if in.RetryOrdinal != call.RetryOrdinal {
+			return nil, domain.New(domain.CodeMalformedReceipt,
+				"receipt retry ordinal %d != call ordinal %d", in.RetryOrdinal, call.RetryOrdinal)
+		}
 		call.Failure = observation.RecordFailure(in.FailureKind)
 		call.RetryOrdinal = observation.NextRetryOrdinal(call)
 		call.Status = domain.InstrumentFailed

@@ -1,0 +1,12 @@
+{
+  "name": "seed-vault-viability-release-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "种质库种子复苏活力验证前端",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "serve": "node scripts/serve.mjs"
+  },
+  "license": "UNLICENSED"
+}

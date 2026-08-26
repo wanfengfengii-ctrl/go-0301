@@ -50,7 +50,15 @@ func (s *Service) AllocateSamples(trialID string, in AllocateInput) error {
 				return nil, err
 			}
 		}
+		// seen tracks identities within this request only, so a repeated ID in
+		// a single payload is rejected as DUPLICATE_SAMPLE_ID.
 		seen := map[string]bool{}
+		// Cross-request duplication is checked after the structural edge test:
+		// resending an existing node with a different parent must still surface
+		// as MULTIPLE_PARENT / LINEAGE_CYCLE, while resending it with the same
+		// (or absent) parent but changed data — e.g. lot-1 with a new count or
+		// species — is rejected as DUPLICATE_SAMPLE_ID rather than silently
+		// overwriting the stored node when the event replays.
 		for _, sl := range in.SeedLots {
 			if seen[sl.ID] {
 				return nil, duplicateSampleErr(sl.ID)
@@ -60,6 +68,9 @@ func (s *Service) AllocateSamples(trialID string, in AllocateInput) error {
 				if err := scratch.AddEdge(sl.ParentID, sl.ID); err != nil {
 					return nil, err
 				}
+			}
+			if _, exists := t.SeedLots[sl.ID]; exists {
+				return nil, duplicateSampleErr(sl.ID)
 			}
 		}
 		for _, su := range in.Samples {
@@ -72,6 +83,9 @@ func (s *Service) AllocateSamples(trialID string, in AllocateInput) error {
 					return nil, err
 				}
 			}
+			if _, exists := t.Samples[su.ID]; exists {
+				return nil, duplicateSampleErr(su.ID)
+			}
 		}
 		for _, g := range in.Groups {
 			if seen[g.ID] {
@@ -83,6 +97,9 @@ func (s *Service) AllocateSamples(trialID string, in AllocateInput) error {
 					return nil, err
 				}
 			}
+			if _, exists := t.Groups[g.ID]; exists {
+				return nil, duplicateSampleErr(g.ID)
+			}
 		}
 		for _, pl := range in.Plates {
 			if seen[pl.ID] {
@@ -93,6 +110,9 @@ func (s *Service) AllocateSamples(trialID string, in AllocateInput) error {
 				if err := scratch.AddEdge(pl.GroupID, pl.ID); err != nil {
 					return nil, err
 				}
+			}
+			if _, exists := t.Plates[pl.ID]; exists {
+				return nil, duplicateSampleErr(pl.ID)
 			}
 		}
 

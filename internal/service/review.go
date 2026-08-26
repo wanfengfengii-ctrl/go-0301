@@ -108,10 +108,11 @@ func (s *Service) DecideTerminal(trialID string, in TerminalInput) (domain.Termi
 
 // GetCredential returns the permanent terminal credential for a trial, if any.
 func (s *Service) GetCredential(trialID string) (domain.TerminalCredential, error) {
-	t, ok := s.readTrial(trialID)
+	t, unlock, ok := s.readTrial(trialID)
 	if !ok {
 		return domain.TerminalCredential{}, domain.New(domain.CodeInvalidSampleCount, "trial %q not found", trialID)
 	}
+	defer unlock()
 	if t.Credential == nil {
 		return domain.TerminalCredential{}, domain.New(domain.CodeInvalidSampleCount,
 			"trial %q has no terminal credential", trialID)

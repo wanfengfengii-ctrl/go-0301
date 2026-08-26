@@ -37,7 +37,8 @@ func (s *Service) CreateTrial(in CreateTrialInput) (domain.ViabilityTrial, error
 		return domain.ViabilityTrial{}, err
 	}
 	if !created {
-		if t, ok := s.readTrial(rec.Result); ok {
+		if t, unlock, ok := s.readTrial(rec.Result); ok {
+			defer unlock()
 			return t.Trial, nil
 		}
 		return domain.ViabilityTrial{}, domain.New(domain.CodeIdempotencyConflict, "idempotency key already bound")
@@ -52,7 +53,8 @@ func (s *Service) CreateTrial(in CreateTrialInput) (domain.ViabilityTrial, error
 	}); err != nil {
 		return domain.ViabilityTrial{}, err
 	}
-	t, _ := s.readTrial(id)
+	t, unlock, _ := s.readTrial(id)
+	defer unlock()
 	return t.Trial, nil
 }
 
@@ -105,16 +107,18 @@ func (s *Service) LockTrial(trialID string, in LockTrialInput) (domain.Viability
 	if already.ID != "" {
 		return already, nil
 	}
-	t, _ := s.readTrial(trialID)
+	t, unlock, _ := s.readTrial(trialID)
+	defer unlock()
 	return t.Trial, nil
 }
 
 // GetTrial returns the current trial view, or a not-found error.
 func (s *Service) GetTrial(trialID string) (domain.ViabilityTrial, error) {
-	t, ok := s.readTrial(trialID)
+	t, unlock, ok := s.readTrial(trialID)
 	if !ok {
 		return domain.ViabilityTrial{}, domain.New(domain.CodeInvalidSampleCount, "trial %q not found", trialID)
 	}
+	defer unlock()
 	return t.Trial, nil
 }
 

@@ -117,13 +117,21 @@ func (s *Service) mutate(fn func() ([]event, error)) error {
 	return nil
 }
 
-// readTrial returns a projection snapshot under the lock, without permitting
-// concurrent mutation.
-func (s *Service) readTrial(id string) (*trialState, bool) {
+// readTrial returns the trial projection together with an unlock function.
+// The caller MUST defer the unlock before reading the projection and MUST NOT
+// retain the pointer after unlocking: the projection is live state, not a
+// snapshot, so the lock must be held across the whole read. Without that,
+// concurrent writers (mutate -> apply*) racing the in-memory maps cause a
+// "concurrent map iteration and map write" fault (e.g. a lineage read while a
+// sample allocation is being applied).
+func (s *Service) readTrial(id string) (*trialState, func(), bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	t, ok := s.trials[id]
-	return t, ok
+	if !ok {
+		s.mu.Unlock()
+		return nil, func() {}, false
+	}
+	return t, func() { s.mu.Unlock() }, true
 }
 
 // TrialSummaries returns a stable, id-ordered summary of every known trial.

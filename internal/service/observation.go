@@ -55,10 +55,11 @@ func (s *Service) RecordObservation(trialID string, in ObservationInput) error {
 // PlateMetrics returns the viability metrics for a plate's latest observation,
 // or an error if the plate has no observations yet.
 func (s *Service) PlateMetrics(trialID, plateID string) (observation.Metrics, error) {
-	t, ok := s.readTrial(trialID)
+	t, unlock, ok := s.readTrial(trialID)
 	if !ok {
 		return observation.Metrics{}, domain.New(domain.CodeInvalidSampleCount, "trial %q not found", trialID)
 	}
+	defer unlock()
 	pl, ok := t.Plates[plateID]
 	if !ok {
 		return observation.Metrics{}, domain.New(domain.CodeInvalidSampleCount, "plate %q not found", plateID)

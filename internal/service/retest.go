@@ -64,10 +64,11 @@ func (s *Service) GenerateRetest(trialID string, in RetestInput) (domain.RetestS
 // GetRetest returns a retest set by its source generation and reason, or by its
 // id if the reason is empty.
 func (s *Service) GetRetest(trialID string, sourceGen domain.GenerationNumber, reason string) (domain.RetestSet, error) {
-	t, ok := s.readTrial(trialID)
+	t, unlock, ok := s.readTrial(trialID)
 	if !ok {
 		return domain.RetestSet{}, domain.New(domain.CodeInvalidSampleCount, "trial %q not found", trialID)
 	}
+	defer unlock()
 	if reason == "" {
 		// find by source generation (the unique set that opened it)
 		for _, rs := range t.Retests {

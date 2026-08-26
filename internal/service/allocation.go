@@ -137,10 +137,11 @@ type AllocationView struct {
 // Lineage returns the canonical lineage and grain-conservation report for a
 // trial, ordered by identity so the response is stable across restarts.
 func (s *Service) Lineage(trialID string) (LineageView, error) {
-	t, ok := s.readTrial(trialID)
+	t, unlock, ok := s.readTrial(trialID)
 	if !ok {
 		return LineageView{}, domain.New(domain.CodeInvalidSampleCount, "trial %q not found", trialID)
 	}
+	defer unlock()
 
 	view := LineageView{TrialID: trialID, Conserved: true}
 	for _, sl := range t.SeedLots {

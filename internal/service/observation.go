@@ -16,8 +16,10 @@ type ObservationInput struct {
 // RecordObservation records a plate's classification counts, enforcing the
 // mutually-exclusive, monotonic and bounded classification invariants against
 // the previous observation, plus generation match and monotonic logical time.
-// Invalid counts or a time regression leave the valid observation history
-// unchanged.
+// Invalid counts or a time regression leave both the valid observation history
+// and the trial's logical clock unchanged: a rejected observation never
+// advances the trial time, so it cannot block a later valid observation at an
+// earlier logical time.
 func (s *Service) RecordObservation(trialID string, in ObservationInput) error {
 	return s.mutate(func() ([]event, error) {
 		t, ok := s.trials[trialID]
@@ -28,15 +30,21 @@ func (s *Service) RecordObservation(trialID string, in ObservationInput) error {
 		if !ok {
 			return nil, domain.New(domain.CodeInvalidSampleCount, "plate %q not found", in.PlateID)
 		}
-		if err := t.advanceClock(in.LogicalTime); err != nil {
-			return nil, err
-		}
+		// Validate the classification counts before advancing the trial
+		// clock. advanceClock mutates the in-memory projection directly, so
+		// calling it first would let a rejected observation (a regressed or
+		// over-sown count) push the logical clock forward even though no
+		// evidence is committed, turning a later valid observation at an
+		// earlier time into a spurious TIME_REGRESSION.
 		history := t.Observations[in.PlateID]
 		var prev map[domain.ObservationClass]int64
 		if len(history) > 0 {
 			prev = history[len(history)-1].Counts
 		}
 		if err := observation.ValidateCounts(prev, in.Counts, pl.Sown); err != nil {
+			return nil, err
+		}
+		if err := t.advanceClock(in.LogicalTime); err != nil {
 			return nil, err
 		}
 		o := domain.Observation{

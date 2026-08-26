@@ -13,9 +13,16 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"sync/atomic"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver (no cgo), amd64/arm64 safe
 )
+
+// memSeq assigns each in-memory store a process-unique database name. A shared
+// in-memory SQLite database is keyed by the name in its DSN, so a fixed name
+// would alias every :memory: store to the same database; a unique name gives
+// each store a clean, isolated copy that is dropped when its connection closes.
+var memSeq uint64
 
 // Store wraps a single SQLite database file (or an in-memory database when
 // path is ":memory:"). It serializes writes through a single connection so
@@ -26,10 +33,17 @@ type Store struct {
 
 // Open opens the store at path, creating the schema if necessary, and returns
 // a ready-to-use Store. Pass ":memory:" for a throwaway database.
+//
+// Each ":memory:" open gets its own private in-memory database: a shared-cache
+// in-memory database is identified by the name in its DSN, so a fixed name
+// would alias every throwaway store to the same data. A per-open unique name
+// (plus a single connection per store) keeps each store isolated, and the
+// database is released when its sole connection closes.
 func Open(path string) (*Store, error) {
 	dsn := path
 	if path == "" || path == ":memory:" {
-		dsn = "file:seed-vault?mode=memory&cache=shared"
+		name := fmt.Sprintf("seed-vault-mem-%d", atomic.AddUint64(&memSeq, 1))
+		dsn = fmt.Sprintf("file:%s?mode=memory&cache=shared", name)
 	}
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {

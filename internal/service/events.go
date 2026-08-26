@@ -204,6 +204,14 @@ func (t *trialState) apply(typ string, raw json.RawMessage) error {
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return err
 		}
+		// Evict any lease that the new one supersedes on the same resource, so
+		// replay does not leave an orphaned entry that a later release could
+		// accept (matching the live AcquireLease command's eviction). This keeps
+		// the resource index authoritative: only the current holder's id maps
+		// from the resource, and a stale holder cannot release another's lease.
+		if prevID, held := t.LeaseRes[p.Lease.Resource]; held && prevID != p.Lease.ID {
+			delete(t.Leases, prevID)
+		}
 		t.Leases[p.Lease.ID] = p.Lease
 		t.LeaseRes[p.Lease.Resource] = p.Lease.ID
 	case evLeaseRenewed:
@@ -329,6 +337,12 @@ func (t *trialState) applyAllocation(p allocatedPayload) error {
 	}
 	t.Allocations[p.SampleID] = p.Allocation
 	for _, l := range p.Leases {
+		// Evict any lease the allocation's acquisition supersedes on the same
+		// resource, so replay never leaves an orphaned holder (see
+		// evLeaseAcquired). Only the current holder is retained per resource.
+		if prevID, held := t.LeaseRes[l.Resource]; held && prevID != l.ID {
+			delete(t.Leases, prevID)
+		}
 		t.Leases[l.ID] = l
 		t.LeaseRes[l.Resource] = l.ID
 	}

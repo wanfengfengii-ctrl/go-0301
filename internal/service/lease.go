@@ -89,7 +89,10 @@ func (s *Service) RenewLease(trialID, id, holder string, now, duration int64) (d
 	return out, err
 }
 
-// ReleaseLease frees a lease if the holder matches.
+// ReleaseLease frees a lease if the holder matches. It refuses to release a
+// lease that has been superseded on its resource by a newer acquisition, so a
+// stale holder cannot drop the current holder's index (for example after a
+// restart replays an acquisition that left the old lease orphaned).
 func (s *Service) ReleaseLease(trialID, id, holder string) error {
 	return s.mutate(func() ([]event, error) {
 		t, ok := s.trials[trialID]
@@ -102,6 +105,14 @@ func (s *Service) ReleaseLease(trialID, id, holder string) error {
 		}
 		if l.Holder != holder {
 			return nil, domain.New(domain.CodeLeaseConflict, "lease %q held by %q, not %q", id, l.Holder, holder)
+		}
+		// The resource index is authoritative: if a later acquisition has
+		// rebound this resource to a different lease, this id is a stale,
+		// superseded entry that must not be released.
+		if cur, held := t.LeaseRes[l.Resource]; held && cur != id {
+			return nil, domain.New(domain.CodeLeaseConflict,
+				"lease %q superseded on resource %q by %q", id, l.Resource, cur).
+				WithDetails(l.Resource, strconv.FormatInt(l.ExpiresAt, 10))
 		}
 		return []event{{trialID: trialID, typ: evLeaseReleased, payload: leaseReleasedPayload{ID: id}}}, nil
 	})

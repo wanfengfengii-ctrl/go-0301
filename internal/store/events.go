@@ -56,7 +56,7 @@ func AppendRaw(tx *sql.Tx, trialID, typ, payload string) (int64, error) {
 		return 0, fmt.Errorf("read chain head: %w", err)
 	}
 	nextSeq := lastSeq + 1
-	digest := digestEvent(lastHash, nextSeq, typ, payload)
+	digest := digestEvent(lastHash, nextSeq, trialID, typ, payload)
 
 	if _, err := tx.Exec(
 		`INSERT INTO events(seq, trial_id, type, payload, digest) VALUES (?, ?, ?, ?, ?)`,
@@ -70,10 +70,13 @@ func AppendRaw(tx *sql.Tx, trialID, typ, payload string) (int64, error) {
 	return nextSeq, nil
 }
 
-// digestEvent computes the hash-chain digest for a single event.
-func digestEvent(prev string, seq int64, typ, payload string) string {
+// digestEvent computes the hash-chain digest for a single event. The trial id is
+// part of the digest so that redirecting an event to a different trial (its
+// membership) breaks the chain and is detected at recovery, instead of being
+// silently replayed onto the wrong trial.
+func digestEvent(prev string, seq int64, trialID, typ, payload string) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "%s:%d:%s:%s", prev, seq, typ, payload)
+	fmt.Fprintf(h, "%s:%d:%s:%s:%s", prev, seq, trialID, typ, payload)
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -106,10 +109,13 @@ func (s *Store) EventsSince(seq int64) ([]Event, error) {
 	return out, rows.Err()
 }
 
-// VerifyChain re-checks every event digest from genesis to the chain head. It
-// returns the first broken sequence number (or 0 when the chain is intact).
+// VerifyChain re-checks every event digest from genesis to the chain head. The
+// digest binds the previous digest, the sequence number, the trial id, the
+// event type and the payload, so redirecting an event to a different trial
+// breaks the chain and is reported as corruption. It returns the first broken
+// sequence number (or 0 when the chain is intact).
 func (s *Store) VerifyChain() (int64, error) {
-	rows, err := s.db.Query(`SELECT seq, type, payload, digest FROM events ORDER BY seq ASC`)
+	rows, err := s.db.Query(`SELECT seq, trial_id, type, payload, digest FROM events ORDER BY seq ASC`)
 	if err != nil {
 		return 0, fmt.Errorf("query events: %w", err)
 	}
@@ -118,11 +124,11 @@ func (s *Store) VerifyChain() (int64, error) {
 	prev := genesisHash
 	var seq int64
 	for rows.Next() {
-		var typ, payload, digest string
-		if err := rows.Scan(&seq, &typ, &payload, &digest); err != nil {
+		var trialID, typ, payload, digest string
+		if err := rows.Scan(&seq, &trialID, &typ, &payload, &digest); err != nil {
 			return 0, fmt.Errorf("scan event: %w", err)
 		}
-		if want := digestEvent(prev, seq, typ, payload); want != digest {
+		if want := digestEvent(prev, seq, trialID, typ, payload); want != digest {
 			return seq, nil
 		}
 		prev = digest
